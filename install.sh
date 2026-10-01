@@ -11,9 +11,9 @@
 
 set -euo pipefail
 
-REPO_URL="https://github.com/Arize-ai/coding-harness-tracing.git"
-INSTALL_BRANCH="${ARIZE_INSTALL_BRANCH:-main}"
-TARBALL_URL="https://github.com/Arize-ai/coding-harness-tracing/archive/refs/heads/${INSTALL_BRANCH}.tar.gz"
+REPO_URL="https://github.com/rbavery/coding-harness-tracing.git"
+INSTALL_BRANCH="${ARIZE_INSTALL_BRANCH:-codex/bug-bash-installer}"
+TARBALL_URL="https://github.com/rbavery/coding-harness-tracing/archive/refs/heads/${INSTALL_BRANCH}.tar.gz"
 INSTALL_DIR="${HOME}/.arize/harness"
 VENV_DIR="${INSTALL_DIR}/venv"
 # When set, install from local wheels in this directory instead of fetching the
@@ -119,7 +119,6 @@ install_repo() {
         fi
         return 0
     fi
-    git_sync_harness_repo "$INSTALL_BRANCH" && return 0
     install_repo_tarball
 }
 
@@ -342,7 +341,7 @@ main() {
             --branch)
                 i=$((i + 1))
                 INSTALL_BRANCH="${args[$i]:-main}"
-                TARBALL_URL="https://github.com/Arize-ai/coding-harness-tracing/archive/refs/heads/${INSTALL_BRANCH}.tar.gz"
+                TARBALL_URL="https://github.com/rbavery/coding-harness-tracing/archive/refs/heads/${INSTALL_BRANCH}.tar.gz"
                 ;;
             --wheel-dir)
                 i=$((i + 1))
