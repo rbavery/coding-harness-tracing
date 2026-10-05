@@ -11,8 +11,8 @@ from core.constants import WORKSHOP_ENDPOINT, WORKSHOP_PROFILE, WORKSHOP_PROJECT
 from core.setup import _env, dry_run, env_flag, info, non_interactive
 
 
-def configure(config: dict, config_path: Path) -> str:
-    entry = config.get("harnesses", {}).get("codex") or {}
+def configure(config: dict, config_path: Path, harness_name: str = "codex") -> str:
+    entry = config.get("harnesses", {}).get(harness_name) or {}
     existing = entry.get("profile") == WORKSHOP_PROFILE
     info(f"Workshop tracing: {WORKSHOP_ENDPOINT}, project {WORKSHOP_PROJECT}")
     info("No Phoenix account or email required. Arize usage telemetry is disabled.")
@@ -26,8 +26,9 @@ def configure(config: dict, config_path: Path) -> str:
     if not api_key:
         raise ValueError("A shared workshop API key is required. Paste it at setup or supply PHOENIX_API_KEY.")
 
-    if existing and isinstance(config.get("logging"), dict):
-        logging = config["logging"]
+    saved_logging = entry.get("logging", config.get("logging"))
+    if existing and isinstance(saved_logging, dict):
+        logging = saved_logging
     elif non_interactive():
         logging = {
             "prompts": env_flag("ARIZE_LOG_PROMPTS", default=False),
@@ -44,7 +45,7 @@ def configure(config: dict, config_path: Path) -> str:
     user_id = entry.get("user_id", "") if existing else ""
     if not user_id.startswith("participant-"):
         user_id = "participant-" + uuid4().hex
-    config.setdefault("harnesses", {})["codex"] = {
+    config.setdefault("harnesses", {})[harness_name] = {
         "profile": WORKSHOP_PROFILE,
         "target": "phoenix",
         "endpoint": WORKSHOP_ENDPOINT,
@@ -52,10 +53,13 @@ def configure(config: dict, config_path: Path) -> str:
         "api_key": api_key,
         "user_id": user_id,
     }
-    config["logging"] = logging
+    if harness_name == "codex" or "logging" not in config:
+        config["logging"] = logging
+    config["harnesses"][harness_name]["logging"] = logging
     if dry_run():
         info("would save workshop tracing settings")
     else:
         save_config(config, str(config_path))
         config_path.chmod(0o600)
+    info(f"Participant ID: {user_id}")
     return user_id

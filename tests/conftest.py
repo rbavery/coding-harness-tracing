@@ -49,13 +49,18 @@ def isolate_config(tmp_path, monkeypatch):
     import os
 
     from core.common import env
+    from core.tracing_control import hook_generation, hook_service
 
     for key in [k for k in os.environ if k.startswith(_ISOLATED_ENV_PREFIXES) and k not in _ISOLATED_ENV_EXEMPT]:
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setattr("core.config.CONFIG_FILE", tmp_path / "no-such-config.json")
     env.invalidate_caches()
+    generation_token = hook_generation.set(None)
+    service_token = hook_service.set("")
     yield
     env.invalidate_caches()
+    hook_generation.reset(generation_token)
+    hook_service.reset(service_token)
 
 
 @pytest.fixture

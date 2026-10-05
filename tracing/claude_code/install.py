@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+import os
 import shlex
 import sys
 
 from core.config import load_config
+from core.constants import WORKSHOP_PROFILE
 from core.setup import (
     dry_run,
     ensure_harness_installed,
@@ -25,6 +27,8 @@ from core.setup import (
     write_config,
     write_logging_config,
 )
+from core.setup.workshop import configure as configure_workshop
+from core.tracing_control import control_path, initialize_control
 from tracing.claude_code.constants import (
     ARIZE_ENV_KEYS,
     DISPLAY_NAME,
@@ -36,18 +40,26 @@ from tracing.claude_code.constants import (
 )
 
 
-def install(with_skills: bool = False) -> None:
+def install(with_skills: bool = False, workshop: bool = False) -> None:
     """Install Claude Code tracing: configure backend, register hooks, optionally symlink skills."""
     if not ensure_harness_installed(DISPLAY_NAME, home_subdir=HARNESS_HOME, bin_name=HARNESS_BIN):
         info("Aborted.")
         return
 
+    # Validate existing settings before writing workshop credentials. Never
+    # replace a malformed settings file with an empty configuration.
+    settings = _load_settings()
     ensure_shared_runtime()
 
     config = load_config()
     existing_entry = (config.get("harnesses") or {}).get(HARNESS_NAME)
+    workshop = workshop or (isinstance(existing_entry, dict) and existing_entry.get("profile") == WORKSHOP_PROFILE)
 
-    if isinstance(existing_entry, dict) and "target" in existing_entry:
+    if workshop:
+        from core import setup
+
+        configure_workshop(config, setup.CONFIG_FILE, HARNESS_NAME)
+    elif isinstance(existing_entry, dict) and "target" in existing_entry:
         # Already configured — just let user update project_name.
         project_name = prompt_project_name(HARNESS_NAME, existing_entry["target"], config)
         merge_harness_entry(HARNESS_NAME, project_name)
@@ -70,13 +82,16 @@ def install(with_skills: bool = False) -> None:
 
     # Logging settings are global. Prompt only if no `logging:` block exists yet —
     # subsequent harness installs reuse what the first wizard wrote.
-    if config.get("logging") is None:
+    if not workshop and config.get("logging") is None:
         logging_block = prompt_content_logging()
         write_logging_config(logging_block)
     else:
         info("Using existing logging settings from config.json")
 
-    _register_claude_hooks()
+    if not dry_run():
+        enabled = settings.get("env", {}).get("ARIZE_TRACE_ENABLED", os.environ.get("ARIZE_TRACE_ENABLED", "true"))
+        initialize_control(HARNESS_NAME, enabled=str(enabled).lower() == "true")
+    _register_claude_hooks(workshop=workshop)
     if with_skills:
         symlink_skills(HARNESS_NAME)
     info(f"Claude Code tracing installed ({SETTINGS_FILE})")
@@ -87,17 +102,30 @@ def uninstall() -> None:
     _unregister_claude_hooks()
     remove_harness_entry(HARNESS_NAME)
     unlink_skills(HARNESS_NAME)
+    if not dry_run():
+        control_path(HARNESS_NAME).unlink(missing_ok=True)
     info("Claude Code tracing uninstalled")
 
 
 def _load_settings() -> dict:
-    """Load SETTINGS_FILE as JSON, returning {} if missing or malformed."""
+    """Load settings without overwriting malformed existing user configuration."""
     if not SETTINGS_FILE.exists():
         return {}
-    try:
-        return json.loads(SETTINGS_FILE.read_text())
-    except (json.JSONDecodeError, OSError):
-        return {}
+    settings = json.loads(SETTINGS_FILE.read_text())
+    if not isinstance(settings, dict):
+        raise ValueError("Claude Code settings must be a JSON object")
+    for key, expected in (("env", dict), ("hooks", dict), ("plugins", list)):
+        if key in settings and not isinstance(settings[key], expected):
+            raise ValueError(f"Claude Code settings {key} has an invalid type")
+    for entries in settings.get("hooks", {}).values():
+        if not isinstance(entries, list):
+            raise ValueError("Claude Code hook entries must be lists")
+        for entry in entries:
+            if not isinstance(entry, dict) or not isinstance(entry.get("hooks", []), list):
+                raise ValueError("Claude Code hook groups have an invalid type")
+            if any(not isinstance(hook, dict) for hook in entry.get("hooks", [])):
+                raise ValueError("Claude Code hooks must be objects")
+    return settings
 
 
 def _save_settings(settings: dict) -> None:
@@ -106,7 +134,7 @@ def _save_settings(settings: dict) -> None:
     SETTINGS_FILE.write_text(json.dumps(settings, indent=2) + "\n")
 
 
-def _register_claude_hooks() -> None:
+def _register_claude_hooks(workshop: bool = False) -> None:
     """Read SETTINGS_FILE (or init to {}), add plugin reference + hook commands.
 
     Registering the local plugin (path → ~/.arize/harness/tracing/claude_code)
@@ -137,6 +165,11 @@ def _register_claude_hooks() -> None:
     # backend (which honors PHOENIX_PROJECT instead) — see issue #74.
     env_block = settings.setdefault("env", {})
     env_block.setdefault("ARIZE_TRACE_ENABLED", "true")
+    if workshop:
+        # The persistent switch retains the prior false value. Normalize this
+        # startup env flag so resume can enable capture in the restarted agent.
+        env_block["ARIZE_TRACE_ENABLED"] = "true"
+        env_block["PHOENIX_TELEMETRY_ENABLED"] = "false"
 
     # Register hooks
     hooks = settings.setdefault("hooks", {})
@@ -238,13 +271,18 @@ def _unregister_claude_hooks() -> None:
     _save_settings(settings)
 
 
-if __name__ == "__main__":
-    cmd = sys.argv[1] if len(sys.argv) > 1 else ""
-    flags = set(sys.argv[2:])
+def cli_main(argv: list[str] | None = None) -> None:
+    argv = sys.argv if argv is None else argv
+    cmd = argv[1] if len(argv) > 1 else ""
+    flags = set(argv[2:])
     if cmd == "install":
-        install(with_skills="--with-skills" in flags)
+        install(with_skills="--with-skills" in flags, workshop="--workshop" in flags)
     elif cmd == "uninstall":
         uninstall()
     else:
-        print("usage: install.py {install|uninstall} [--with-skills]", file=sys.stderr)
+        print("usage: install.py {install|uninstall} [--with-skills] [--workshop]", file=sys.stderr)
         sys.exit(2)
+
+
+if __name__ == "__main__":
+    cli_main()
