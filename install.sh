@@ -279,6 +279,9 @@ Commands:
   omp         Install and configure tracing for Oh My Pi (omp)
   devin       Install and configure tracing for Devin CLI
   status      Report configured harnesses and whether their hooks are wired up
+  pause codex          Pause Codex trace exports without restarting
+  resume codex         Resume Codex trace exports without restarting
+  trace-status codex   Show whether Codex trace exports are enabled
   update      Update the installed coding-harness-tracing and re-register all harnesses
   uninstall <harness>   Tear down one harness
   uninstall             Full wipe: venv + repo + shared config
@@ -387,6 +390,14 @@ main() {
                 fi
                 "$vp" -m core.setup.wipe
             fi
+            ;;
+        pause|resume|trace-status)
+            [[ "$subcmd" == codex ]] || { err "Use ${cmd} codex"; exit 1; }
+            local vp; vp=$(venv_python) || { err "Venv not found — run install first"; exit 1; }
+            local action=status
+            [[ "$cmd" != pause ]] || action=off
+            [[ "$cmd" != resume ]] || action=on
+            "$vp" -m tracing.codex.control "$action"
             ;;
         status)
             local vp; vp=$(venv_python) || { err "Venv not found — nothing installed"; exit 1; }

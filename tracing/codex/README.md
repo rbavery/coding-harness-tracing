@@ -13,6 +13,28 @@ If `notify` already contains a command, the installer preserves it using `--prev
 
 The rollout reader also recognizes user prompts stored as `response_item` messages. When content provenance is available, it excludes injected repository instructions and environment content.
 
+### Pause and resume exports
+
+After installing the bug-bash fork, run these commands in Terminal:
+
+```sh
+bash ~/.arize/harness/install.sh pause codex
+bash ~/.arize/harness/install.sh resume codex
+bash ~/.arize/harness/install.sh trace-status codex
+```
+
+Pause and resume apply to all chats using your Codex home. The hook reads the
+switch at each completed turn, so you do not need to restart Codex. An export
+already in progress may finish. Updating the installer preserves a paused state.
+These commands do not delete existing Phoenix traces or Codex transcripts.
+
+The package also installs `codex-tracing off`, `on`, and `status` in
+`~/.arize/harness/venv/bin`. The shell commands above do not require a PATH change.
+
+To stop acceptance from Phoenix, an admin can revoke the participant's dedicated
+system API key in Settings. Resume requires a replacement key. Local resume cannot
+restore a revoked key.
+
 ### Remote setup
 
 #### macOS / Linux
