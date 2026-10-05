@@ -11,7 +11,6 @@ Self-contained module that handles:
 
 from __future__ import annotations
 
-import os
 import re
 import sys
 from pathlib import Path
@@ -44,6 +43,7 @@ from tracing.codex.constants import (
     NOTIFY_BIN_NAME,
     get_codex_home,
 )
+from tracing.codex.control import env_value, replace_setting, write_env_file
 from tracing.codex.install_legacy import cleanup_legacy_install
 from tracing.codex.notify_chain import install_notify, remove_notify
 
@@ -167,16 +167,12 @@ def _write_env_file(path: Path, user_id: str = "") -> None:
         info(f"would write env file {path}")
         return
 
-    lines = ["export ARIZE_TRACE_ENABLED=true"]
+    text = path.read_text() if path.exists() else ""
+    enabled = env_value(text, "ARIZE_TRACE_ENABLED", "true").lower() == "true"
+    text = replace_setting(text, "ARIZE_TRACE_ENABLED", "true" if enabled else "false")
     if user_id:
-        lines.append(f"export ARIZE_USER_ID={user_id}")
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("\n".join(lines) + "\n")
-    try:
-        os.chmod(path, 0o600)
-    except OSError:
-        pass
+        text = replace_setting(text, "ARIZE_USER_ID", user_id)
+    write_env_file(path, text)
 
 
 def _is_our_env_file(path: Path) -> bool:
@@ -265,6 +261,8 @@ def install(with_skills: bool = False) -> None:
 
     info("")
     info("Codex tracing installed.")
+    info("Pause without restarting Codex: bash ~/.arize/harness/install.sh pause codex")
+    info("Resume: bash ~/.arize/harness/install.sh resume codex")
 
 
 def uninstall() -> None:

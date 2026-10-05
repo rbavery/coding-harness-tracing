@@ -122,8 +122,9 @@ class TestPyprojectEntryPointsUpdated:
         assert not any(name.startswith("arize-setup-") for name in self.scripts)
 
     def test_total_entry_point_count(self):
-        """Entry point count should match expected harness + arize-config."""
-        expected_count = len(EXPECTED_HARNESS_ENTRY_POINTS) + 1  # +1 for arize-config
+        """Include the config helper and participant tracing control."""
+        assert self.scripts["codex-tracing"] == "tracing.codex.control:main"
+        expected_count = len(EXPECTED_HARNESS_ENTRY_POINTS) + 2
         assert (
             len(self.scripts) == expected_count
         ), f"Expected {expected_count} entry points, got {len(self.scripts)}: {sorted(self.scripts.keys())}"
