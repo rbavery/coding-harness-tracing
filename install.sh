@@ -10,6 +10,7 @@
 #   ./install.sh update
 
 set -euo pipefail
+export PHOENIX_TELEMETRY_ENABLED=false
 
 REPO_URL="https://github.com/rbavery/coding-harness-tracing.git"
 INSTALL_BRANCH="${ARIZE_INSTALL_BRANCH:-codex/bug-bash-installer}"
@@ -242,7 +243,7 @@ harness_dir() {
 }
 
 install_harness() {
-    local cmd="$1" skills="$2"
+    local cmd="$1" skills="$2" advanced="${3:-false}"
     harness_dir "$cmd" >/dev/null || { err "Unknown harness: ${cmd}"; usage; exit 1; }
     header "Installing ${cmd} tracing"
     local python_cmd; python_cmd=$(find_python) || { err "No Python 3.9+ found"; exit 1; }
@@ -252,11 +253,10 @@ install_harness() {
     local vp; vp=$(venv_python) || { err "Venv python not found after setup"; exit 1; }
     info "Migrating legacy config.yaml to config.json (if present)..."
     "$vp" -m core.config migrate || true
-    if [[ "$skills" == true ]]; then
-        run_harness_py "$cmd" "$vp" install --with-skills
-    else
-        run_harness_py "$cmd" "$vp" install
-    fi
+    local install_args=(install)
+    [[ "$skills" == true ]] && install_args+=(--with-skills)
+    [[ "$cmd" == codex && "$advanced" == true ]] && install_args+=(--advanced)
+    run_harness_py "$cmd" "$vp" "${install_args[@]}"
     info "Setup complete!"
 }
 
@@ -269,7 +269,7 @@ Usage: install.sh <command> [flags]
 
 Commands:
   claude      Install and configure tracing for Claude Code / Agent SDK
-  codex       Install and configure tracing for OpenAI Codex CLI
+  codex       Install workshop tracing for Codex desktop and CLI
   copilot     Install and configure tracing for GitHub Copilot (VS Code + CLI)
   cursor      Install and configure tracing for Cursor IDE
   gemini      Install and configure tracing for Gemini CLI
@@ -287,8 +287,9 @@ Commands:
   uninstall             Full wipe: venv + repo + shared config
 
 Flags:
+  --advanced            With codex: use the original backend configuration wizard
   --with-skills         Symlink harness skills into .agents/skills/
-  --branch NAME         Install from a specific git branch (default: main)
+  --branch NAME         Install from a git branch (default: codex/bug-bash-installer)
   --wheel-dir DIR       Install from local wheels in DIR instead of downloading
                         the repo. No network and no remote code execution; also
                         settable as ARIZE_WHEEL_DIR. Bundle a certifi wheel
@@ -334,11 +335,12 @@ EOF
 # -- Main dispatch -----------------------------------------------------------
 main() {
     local cmd="${1:-}"; shift || true
-    local subcmd="" with_skills=false status_args=""
+    local subcmd="" with_skills=false advanced=false status_args=""
     local args=("$@") i=0
     while [[ $i -lt ${#args[@]} ]]; do
         case "${args[$i]}" in
             --with-skills) with_skills=true ;;
+            --advanced) advanced=true ;;
             --non-interactive|-y) export ARIZE_NONINTERACTIVE=1 ;;
             --json) status_args="--json" ;;
             --branch)
@@ -361,7 +363,7 @@ main() {
 
     case "$cmd" in
         claude|codex|copilot|cursor|gemini|kiro|antigravity|opencode|omp|devin)
-            install_harness "$cmd" "$with_skills"
+            install_harness "$cmd" "$with_skills" "$advanced"
             ;;
         uninstall)
             if [[ -n "$subcmd" ]]; then
@@ -440,7 +442,9 @@ main() {
                     # Keep going, as the uninstall loop does: one harness whose
                     # registration fails should not abandon the rest half-updated.
                     info "Re-registering ${key}..."
-                    run_harness_py "$key" "$vp" install || warn "${key} re-registration failed (continuing)"
+                    local install_args=(install)
+                    [[ "$key" == codex ]] && install_args+=(--advanced)
+                    run_harness_py "$key" "$vp" "${install_args[@]}" || warn "${key} re-registration failed (continuing)"
                 done <<< "$harnesses"
             else info "No installed harnesses found to re-register"; fi
             info "Update complete."

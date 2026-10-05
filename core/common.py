@@ -19,6 +19,7 @@ import urllib.request
 from pathlib import Path
 from typing import IO, Optional
 
+from core.constants import WORKSHOP_ENDPOINT, WORKSHOP_PROFILE, WORKSHOP_PROJECT
 from core.otlp_proto import otlp_json_to_protobuf
 
 # ---------------------------------------------------------------------------
@@ -458,6 +459,9 @@ def resolve_backend(span_dict: dict) -> dict:
     plugins (which skip the interactive wizard) can supply credentials
     purely via the runtime env block in ~/.claude/settings.json.
 
+    Codex's task-eval-workshop profile instead pins the shared endpoint and
+    project and uses only its saved key, ignoring inherited backend overrides.
+
     Env vars consulted:
       - PHOENIX_ENDPOINT      → target=phoenix (overrides config target)
       - ARIZE_API_KEY         → target=arize when paired with ARIZE_SPACE_ID
@@ -501,6 +505,19 @@ def resolve_backend(span_dict: dict) -> dict:
         cfg = {}
 
     harness_cfg = cfg.get("harnesses", {}).get(service_name) or {}
+
+    # Workshop credentials must never be redirected by a participant's existing
+    # Arize AX or local Phoenix environment. Missing credentials fail closed.
+    if service_name == "codex" and harness_cfg.get("profile") == WORKSHOP_PROFILE:
+        if not harness_cfg.get("api_key"):
+            error("Workshop capture key is missing; dropping the trace.")
+            return _none
+        return {
+            "target": "phoenix",
+            "endpoint": WORKSHOP_ENDPOINT,
+            "api_key": harness_cfg["api_key"],
+            "project_name": WORKSHOP_PROJECT,
+        }
 
     # Resolve target first: env-derived backend takes precedence over config target
     target = env._resolve_target(harness_cfg)

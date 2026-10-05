@@ -16,6 +16,7 @@ import sys
 from pathlib import Path
 
 from core.config import get_value, load_config
+from core.constants import WORKSHOP_PROFILE
 from core.setup import (
     CONFIG_FILE,
     dry_run,
@@ -46,6 +47,7 @@ from tracing.codex.constants import (
 from tracing.codex.control import env_value, replace_setting, write_env_file
 from tracing.codex.install_legacy import cleanup_legacy_install
 from tracing.codex.notify_chain import install_notify, remove_notify
+from tracing.codex.workshop import configure as configure_workshop
 
 # Hook events from the legacy installer; used only for cleanup
 _HOOK_EVENTS = (
@@ -161,7 +163,7 @@ def _codex_toml_remove(path: Path, notify_cmd: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _write_env_file(path: Path, user_id: str = "") -> None:
+def _write_env_file(path: Path, user_id: str = "", workshop: bool = False) -> None:
     """Write the codex env file with ARIZE env exports."""
     if dry_run():
         info(f"would write env file {path}")
@@ -172,6 +174,8 @@ def _write_env_file(path: Path, user_id: str = "") -> None:
     text = replace_setting(text, "ARIZE_TRACE_ENABLED", "true" if enabled else "false")
     if user_id:
         text = replace_setting(text, "ARIZE_USER_ID", user_id)
+    if workshop:
+        text = replace_setting(text, "PHOENIX_TELEMETRY_ENABLED", "false")
     write_env_file(path, text)
 
 
@@ -184,7 +188,7 @@ def _is_our_env_file(path: Path) -> bool:
         lines = [ln for ln in text.strip().splitlines() if ln.strip()]
         if len(lines) > 10:
             return False
-        return all(re.match(r"^export ARIZE_", line) for line in lines)
+        return all(re.match(r"^export (?:ARIZE_|PHOENIX_TELEMETRY_ENABLED=)", line) for line in lines)
     except OSError:
         return False
 
@@ -194,7 +198,7 @@ def _is_our_env_file(path: Path) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def install(with_skills: bool = False) -> None:
+def install(with_skills: bool = False, workshop: bool = False) -> None:
     """Install codex tracing harness (hooks-based v2 layout)."""
     codex_home = get_codex_home()
     codex_config_file = codex_home / "config.toml"
@@ -214,8 +218,11 @@ def install(with_skills: bool = False) -> None:
     ensure_shared_runtime()
     config = load_config(str(CONFIG_FILE))
     existing_entry = get_value(config, f"harnesses.{HARNESS_NAME}")
+    workshop = workshop or (isinstance(existing_entry, dict) and existing_entry.get("profile") == WORKSHOP_PROFILE)
 
-    if isinstance(existing_entry, dict) and "target" in existing_entry:
+    if workshop:
+        user_id = configure_workshop(config, CONFIG_FILE)
+    elif isinstance(existing_entry, dict) and "target" in existing_entry:
         info(f"Reusing existing backend: {existing_entry.get('target')}")
         project_name = prompt_project_name(HARNESS_NAME, existing_entry["target"], config)
         merge_harness_entry(HARNESS_NAME, project_name)
@@ -237,7 +244,7 @@ def install(with_skills: bool = False) -> None:
             info("would write config.json with backend credentials")
 
     # Logging settings are global. Prompt only if no `logging:` block exists yet.
-    if (config.get("logging") if config else None) is None:
+    if not workshop and (config.get("logging") if config else None) is None:
         write_logging_config(prompt_content_logging())
     else:
         info("Using existing logging settings from config.json")
@@ -247,7 +254,7 @@ def install(with_skills: bool = False) -> None:
         codex_home.mkdir(parents=True, exist_ok=True)
     else:
         info(f"would create {codex_home}")
-    _write_env_file(codex_env_file, user_id=user_id)
+    _write_env_file(codex_env_file, user_id=user_id, workshop=workshop)
 
     # 4. Write the notify-only TOML layout.
     notify_cmd = str(venv_bin(NOTIFY_BIN_NAME))
@@ -310,14 +317,14 @@ def cli_main(argv: list[str] | None = None) -> None:
     if argv is None:
         argv = sys.argv
     if len(argv) < 2 or argv[1] not in ("install", "uninstall"):
-        print(f"usage: {argv[0]} <install|uninstall> [--with-skills]", file=sys.stderr)
+        print(f"usage: {argv[0]} <install|uninstall> [--with-skills] [--advanced]", file=sys.stderr)
         sys.exit(1)
 
     action = argv[1]
     flags = argv[2:]
 
     if action == "install":
-        install(with_skills="--with-skills" in flags)
+        install(with_skills="--with-skills" in flags, workshop="--advanced" not in flags)
     else:
         uninstall()
 
@@ -327,4 +334,7 @@ if __name__ == "__main__":
         cli_main()
     except (KeyboardInterrupt, EOFError):
         print("\nCancelled.")
+        sys.exit(1)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
         sys.exit(1)

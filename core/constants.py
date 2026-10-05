@@ -22,6 +22,11 @@ BASE_DIR = Path.home() / ".arize" / "harness"
 CONFIG_FILE = BASE_DIR / "config.json"
 CONFIG_FILE_YAML = BASE_DIR / "config.yaml"
 
+# The workshop profile pins Codex exports independently of inherited SDK env vars.
+WORKSHOP_PROFILE = "task-eval-workshop"
+WORKSHOP_ENDPOINT = "https://task-eval-mvp.vercel.app"
+WORKSHOP_PROJECT = "tasks-bug-bash"
+
 # --- Runtime directories ---
 PID_DIR = BASE_DIR / "run"
 LOG_DIR = BASE_DIR / "logs"

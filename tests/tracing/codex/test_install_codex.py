@@ -1183,12 +1183,12 @@ class TestCLIDispatch:
     def test_cli_install(self, fake_home, mock_prompts):
         with patch.object(codex_install, "install") as m:
             codex_install.cli_main(["install.py", "install"])
-            m.assert_called_once_with(with_skills=False)
+            m.assert_called_once_with(with_skills=False, workshop=True)
 
     def test_cli_install_with_skills(self, fake_home, mock_prompts):
         with patch.object(codex_install, "install") as m:
             codex_install.cli_main(["install.py", "install", "--with-skills"])
-            m.assert_called_once_with(with_skills=True)
+            m.assert_called_once_with(with_skills=True, workshop=True)
 
     def test_cli_uninstall(self, fake_home):
         with patch.object(codex_install, "uninstall") as m:

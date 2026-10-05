@@ -3,7 +3,25 @@
 Automatic [OpenInference](https://github.com/Arize-ai/openinference) tracing for the OpenAI Codex CLI. Spans are exported to [Arize AX](https://arize.com) or [Phoenix](https://github.com/Arize-ai/phoenix).
 
 ## Setup
-The installer prompts for your backend (Phoenix or Arize AX) and project name, writes credentials to `~/.arize/harness/config.json`, and registers the hook entries plus the `notify` token-usage backstop in `~/.codex/config.toml`. After installing, approve the hooks via Codex's `/hooks` command (one time per user account).
+The bug-bash fork selects Phoenix at `https://task-eval-mvp.vercel.app` and project
+`tasks-bug-bash`. Paste the shared API key supplied by the organizer and choose
+whether to capture prompts, tool commands, and tool outputs. No Phoenix account
+or email is required. The installer assigns an anonymous participant ID and
+saves the key privately in `~/.arize/harness/config.json`.
+
+Quit Codex before installing, then reopen it. The installer registers a `notify`
+callback in `~/.codex/config.toml`; it reads prompts and tool calls from the local
+Codex rollout after each completed turn. No `/hooks` approval is required.
+
+Workshop exports always use the shared endpoint, even when your shell contains
+Arize AX or local Phoenix credentials. The exporter uses the Python standard
+library and sends no Arize usage analytics. Setup and the Codex env file set
+`PHOENIX_TELEMETRY_ENABLED=false`. The organizer must also disable telemetry on
+the Phoenix server; this client's setting cannot change a remote server.
+
+For a fresh local Phoenix or Arize AX setup, pass `--advanced` to use the original
+configuration wizard. Updating an existing installation preserves its profile,
+anonymous ID, content-logging choice, and paused state.
 
 Pass `--with-skills` to also symlink the `manage-codex-tracing` skill into the current directory's `.agents/skills/` so coding agents in this workspace can help manage Codex tracing configuration.
 
@@ -31,9 +49,9 @@ These commands do not delete existing Phoenix traces or Codex transcripts.
 The package also installs `codex-tracing off`, `on`, and `status` in
 `~/.arize/harness/venv/bin`. The shell commands above do not require a PATH change.
 
-To stop acceptance from Phoenix, an admin can revoke the participant's dedicated
-system API key in Settings. Resume requires a replacement key. Local resume cannot
-restore a revoked key.
+To stop acceptance from Phoenix, an admin can revoke the workshop system API key
+in Settings. A shared key stops uploads for every participant using it. Resume
+requires a replacement key. Local resume cannot restore a revoked key.
 
 ### Remote setup
 
@@ -42,16 +60,19 @@ restore a revoked key.
 Install:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/Arize-ai/coding-harness-tracing/main/install.sh | bash -s -- codex
+curl -fsSL https://raw.githubusercontent.com/rbavery/coding-harness-tracing/codex/bug-bash-installer/install.sh | bash -s -- codex
 ```
 
 Uninstall:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/Arize-ai/coding-harness-tracing/main/install.sh | bash -s -- uninstall codex
+curl -fsSL https://raw.githubusercontent.com/rbavery/coding-harness-tracing/codex/bug-bash-installer/install.sh | bash -s -- uninstall codex
 ```
 
 #### Windows (PowerShell)
+
+The workshop shell installer is for macOS and Linux. These Windows commands use
+the upstream configuration wizard.
 
 Install:
 
@@ -107,23 +128,15 @@ install.bat uninstall codex
 | Setting | Default |
 |---------|---------|
 | Harness key | `codex` |
-| Project name | `codex` |
-| Phoenix endpoint | `http://localhost:6006` |
-| Arize AX endpoint | `otlp.arize.com:443` |
+| Project name | `tasks-bug-bash` |
+| Phoenix endpoint | `https://task-eval-mvp.vercel.app` |
+| Participant identity | Generated anonymous ID, no email |
+| Phoenix usage telemetry | Disabled; disable separately on the server |
 | Hook config file | `~/.codex/config.toml` |
-| Hook events handled | `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `PermissionRequest`, `Stop` (via real Codex hooks); `agent-turn-complete` (via `notify`) for token usage |
+| Hook events handled | `agent-turn-complete` via `notify`, with prompts and tool calls read from the rollout |
 | Env override file | `~/.codex/arize-env.sh` |
 | State directory | `~/.arize/harness/state/codex/` (state files + tool span JSONLs) |
 | Log file | `~/.arize/harness/logs/codex.log` |
-
-## Trust prompt
-
-Codex requires explicit user trust for non-managed hooks before they fire. After install, run:
-
-1. `codex` (start a session)
-2. Type `/hooks` and approve each `arize-hook-codex-*` entry.
-
-Without this one-time approval, hooks won't fire and traces will be limited to the `notify`-based fallback (single LLM span per turn, no tool spans).
 
 ## Verifying tracing
 
