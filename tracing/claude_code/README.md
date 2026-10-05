@@ -29,7 +29,61 @@ Transcript parsing and hook observations are fail-soft. Unknown or malformed rec
 - Unknown future Claude transcript schemas are handled fail-soft, but may produce partial graphs until fixtures and parser support are updated.
 
 ## Setup
-The installer prompts for your backend (Phoenix or Arize AX) and project name, writes credentials to `~/.arize/harness/config.json`, and registers the hooks in `~/.claude/settings.json`.
+This fork's macOS and Linux installer defaults to the Wherobots workshop.
+Quit Claude Code, then run:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/rbavery/coding-harness-tracing/codex/bug-bash-installer/install.sh | bash -s -- claude
+```
+
+Paste the shared workshop API key supplied privately by the organizer and
+choose whether to send prompts, answers, tool commands, and tool outputs.
+The installer saves the shared Phoenix destination and `tasks-bug-bash` project
+in `~/.arize/harness/config.json`, assigns an anonymous participant ID, and
+registers hooks in `~/.claude/settings.json`. It disables Phoenix usage
+telemetry and preserves unrelated settings and hooks.
+
+Reopen Claude Code in the workshop folder and start a fresh session. Have the
+organizer verify a prompt, answer, and tool result in shared Phoenix before the
+exercise. The participant workflow is Claude Code CLI on macOS and Linux.
+IDE, desktop Code sessions, and Agent SDK capture need separate rehearsal.
+
+Run the same installer command to update. It replaces an earlier backend with
+the workshop destination, reuses only a key saved for shared Phoenix, and keeps
+the participant ID, capture choice, and paused state. Workshop identity,
+content preferences, and export routing ignore inherited Arize and Phoenix
+overrides. Capture preferences are saved per agent.
+
+Use `--advanced` to select the original Phoenix or Arize AX backend wizard for
+an installation that does not already have the workshop profile.
+
+### Pause, resume, or uninstall
+
+The hooks read a persistent switch on every invocation. These commands work
+in an open Claude Code session without restarting:
+
+```sh
+bash ~/.arize/harness/install.sh pause claude
+bash ~/.arize/harness/install.sh trace-status claude
+bash ~/.arize/harness/install.sh resume claude
+```
+
+The switch covers all local Claude Code sessions using this installation,
+including sessions outside the workshop folder. Codex has its own switch.
+Resume begins capture at the next user prompt. A turn interrupted by pause and
+turns started while paused are not backfilled. An export already in progress
+may finish. Pausing does not remove Phoenix traces or Claude's local transcripts.
+`trace-status` reports the saved switch; it does not verify endpoint delivery.
+
+After quitting Claude Code, remove its tracing registration:
+
+```sh
+bash ~/.arize/harness/install.sh uninstall claude
+```
+
+Other agents and unrelated Claude hooks remain installed. If you had a backend
+configured before the event, restore it with the organizer. Upstream marketplace
+and Windows installation use the generic setup below, without workshop defaults.
 
 Pass `--with-skills` to also symlink the `manage-claude-code-tracing` skill into the current directory's `.agents/skills/` so Claude can help you manage the configuration interactively.
 

@@ -21,6 +21,7 @@ from typing import IO, Optional
 
 from core.constants import WORKSHOP_ENDPOINT, WORKSHOP_PROFILE, WORKSHOP_PROJECT
 from core.otlp_proto import otlp_json_to_protobuf
+from core.tracing_control import hook_service
 
 # ---------------------------------------------------------------------------
 # Environment helper — reads tracing-related env vars with defaults
@@ -51,6 +52,9 @@ class _Env:
         3. top-level ``user_id`` in config.json (global)
         → ``""`` if none set
         """
+        workshop = self._workshop_entry(service_name)
+        if workshop is not None:
+            return str(workshop.get("user_id", ""))
         raw = os.environ.get("ARIZE_USER_ID")
         if raw is not None:
             return raw
@@ -91,6 +95,8 @@ class _Env:
         else the config ``project_name``, else ``""``. Adapters supply their own
         fallback (service name or cwd basename) when this returns empty.
         """
+        if self._workshop_entry(service_name) is not None:
+            return WORKSHOP_PROJECT
         harness_cfg: dict = {}
         harnesses = self._top_level_config.get("harnesses")
         if isinstance(harnesses, dict):
@@ -186,6 +192,10 @@ class _Env:
 
     def _resolve_log_flag(self, env_key: str, config_key: str, default: bool) -> bool:
         """env var > config.json `logging.<key>` > default."""
+        workshop = self._workshop_entry(hook_service.get())
+        if workshop is not None:
+            logging = workshop.get("logging", self._logging_config)
+            return isinstance(logging, dict) and logging.get(config_key) is True
         raw = os.environ.get(env_key)
         if raw is not None:
             return raw.lower() == "true"
@@ -193,6 +203,16 @@ class _Env:
         if isinstance(val, bool):
             return val
         return default
+
+    def _workshop_entry(self, service_name: str) -> Optional[dict]:
+        entry = self._top_level_config.get("harnesses", {}).get(service_name)
+        if (
+            service_name in ("codex", "claude-code")
+            and isinstance(entry, dict)
+            and entry.get("profile") == WORKSHOP_PROFILE
+        ):
+            return entry
+        return None
 
     @staticmethod
     def _parse_otel_resource_attributes() -> dict:
@@ -508,7 +528,7 @@ def resolve_backend(span_dict: dict) -> dict:
 
     # Workshop credentials must never be redirected by a participant's existing
     # Arize AX or local Phoenix environment. Missing credentials fail closed.
-    if service_name == "codex" and harness_cfg.get("profile") == WORKSHOP_PROFILE:
+    if service_name in ("codex", "claude-code") and harness_cfg.get("profile") == WORKSHOP_PROFILE:
         if not harness_cfg.get("api_key"):
             error("Workshop capture key is missing; dropping the trace.")
             return _none

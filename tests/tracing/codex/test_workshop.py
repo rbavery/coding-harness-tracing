@@ -11,7 +11,8 @@ import pytest
 
 from core import common, setup
 from core.constants import WORKSHOP_ENDPOINT, WORKSHOP_PROFILE, WORKSHOP_PROJECT
-from tracing.codex import control, install, workshop
+from core.setup import workshop
+from tracing.codex import control, install
 from tracing.codex.hooks import handlers
 
 

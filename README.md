@@ -4,6 +4,44 @@ Trace AI coding sessions to [Arize AX](https://arize.com) or [Phoenix](https://g
 
 Claude Code tracing reconstructs each turn as a `CHAIN` containing per-response `LLM` spans, correlated `TOOL` spans, and a foreground subagent `AGENT` subtree when available. See [Claude Code trace structure and current limitations](tracing/claude_code/README.md#trace-structure) for details.
 
+## Wherobots bug-bash tracing
+
+This fork's macOS and Linux installer configures Codex and Claude Code for
+shared Phoenix at `https://task-eval-mvp.vercel.app`, project `tasks-bug-bash`.
+Participants paste an organizer-supplied API key at a hidden prompt and choose
+whether to capture conversation and tool content. Setup assigns an anonymous
+participant ID and disables Phoenix usage telemetry.
+
+Quit the agent before installation, then choose its command:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/rbavery/coding-harness-tracing/codex/bug-bash-installer/install.sh | bash -s -- claude
+curl -fsSL https://raw.githubusercontent.com/rbavery/coding-harness-tracing/codex/bug-bash-installer/install.sh | bash -s -- codex
+```
+
+Reopen the agent and start a fresh session. Ask the organizer to confirm capture
+in shared Phoenix before the exercise. Tracing applies to other local sessions
+too, including sessions outside the workshop folder.
+
+To pause Claude capture, resume at the next prompt, or check its switch:
+
+```sh
+bash ~/.arize/harness/install.sh pause claude
+bash ~/.arize/harness/install.sh resume claude
+bash ~/.arize/harness/install.sh trace-status claude
+```
+
+Use `codex` in those commands to control Codex independently. No restart is
+needed for the switches. Claude turns interrupted by pause and turns started
+while paused are discarded, even after resume. An export already in progress
+may finish. Existing Phoenix traces and native agent transcripts remain.
+Reinstalling preserves each agent's paused state and saved capture choice.
+
+After quitting the agent, run `bash ~/.arize/harness/install.sh uninstall claude`
+or `uninstall codex`. Uninstalling one agent preserves the other's registration.
+Use `--advanced` during installation for the original backend wizard. The
+upstream marketplace and Windows flows below do not configure this workshop.
+
 ## Supported Harnesses
 
 | Harness Integration | Install command | Name |
@@ -27,9 +65,9 @@ Claude Code tracing reconstructs each turn as a `CHAIN` containing per-response 
 
 > Installing Cursor tracing via the Cursor marketplace? The `cursor-tracing` plugin registers all hook events automatically; run the bundled `manage-cursor-tracing` skill once after install to write backend credentials to `~/.arize/harness/config.json`. See [Cursor IDE Tracing](tracing/cursor/README.md#plugin-install) for the full flow.
 
-### Setup walkthrough
+### Generic setup walkthrough
 
-The installer involves a brief interactive setup. The steps below run in order. To skip all of them, see [Non-interactive install](#non-interactive-install).
+Upstream installers and this fork's `--advanced` mode use the setup below. The steps run in order. To skip all of them, see [Non-interactive install](#non-interactive-install).
 
 #### 1. Backend selection
 

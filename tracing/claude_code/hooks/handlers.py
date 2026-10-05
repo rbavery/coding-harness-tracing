@@ -20,9 +20,10 @@ from core.common import (
     get_timestamp_ms,
     log,
     redact_content,
-    send_span,
 )
+from core.common import send_span as _send_span
 from core.event_model import AgentEvent, EventStatus, GraphDiagnostic, ModelCallEvent, ToolEvent, TurnEvent
+from core.tracing_control import can_export
 
 from .adapter import (
     SCOPE_NAME,
@@ -40,6 +41,17 @@ from .transcript import parse_claude_transcript
 # ---------------------------------------------------------------------------
 # Shared helper
 # ---------------------------------------------------------------------------
+
+
+def send_span(span: dict) -> bool:
+    """Recheck capture before each send, including a pause during this hook."""
+    try:
+        if not can_export(SERVICE_NAME):
+            return False
+    except (OSError, ValueError):
+        error("Cannot read Claude Code capture switch; dropping the trace")
+        return False
+    return _send_span(span)
 
 
 def _read_stdin() -> dict:
@@ -1357,9 +1369,9 @@ def _handle_post_compact(input_json: dict) -> None:
 def session_start():
     """Entry point for arize-hook-session-start."""
     try:
-        if not check_requirements():
-            return
         input_json = _read_stdin()
+        if not check_requirements(input_json, "SessionStart"):
+            return
         _handle_session_start(input_json)
     except Exception as e:
         error(f"session_start hook failed: {e}")
@@ -1368,9 +1380,9 @@ def session_start():
 def pre_tool_use():
     """Entry point for arize-hook-pre-tool-use."""
     try:
-        if not check_requirements():
-            return
         input_json = _read_stdin()
+        if not check_requirements(input_json, "PreToolUse"):
+            return
         _handle_pre_tool_use(input_json)
     except Exception as e:
         error(f"pre_tool_use hook failed: {e}")
@@ -1379,9 +1391,9 @@ def pre_tool_use():
 def post_tool_use():
     """Entry point for arize-hook-post-tool-use."""
     try:
-        if not check_requirements():
-            return
         input_json = _read_stdin()
+        if not check_requirements(input_json, "PostToolUse"):
+            return
         _handle_post_tool_use(input_json)
     except Exception as e:
         error(f"post_tool_use hook failed: {e}")
@@ -1390,9 +1402,9 @@ def post_tool_use():
 def user_prompt_submit():
     """Entry point for arize-hook-user-prompt-submit."""
     try:
-        if not check_requirements():
-            return
         input_json = _read_stdin()
+        if not check_requirements(input_json, "UserPromptSubmit"):
+            return
         _handle_user_prompt_submit(input_json)
     except Exception as e:
         error(f"user_prompt_submit hook failed: {e}")
@@ -1401,9 +1413,9 @@ def user_prompt_submit():
 def stop():
     """Entry point for arize-hook-stop."""
     try:
-        if not check_requirements():
-            return
         input_json = _read_stdin()
+        if not check_requirements(input_json, "Stop"):
+            return
         _handle_stop(input_json)
     except Exception as e:
         error(f"stop hook failed: {e}")
@@ -1412,9 +1424,9 @@ def stop():
 def subagent_stop():
     """Entry point for arize-hook-subagent-stop."""
     try:
-        if not check_requirements():
-            return
         input_json = _read_stdin()
+        if not check_requirements(input_json, "SubagentStop"):
+            return
         _handle_subagent_stop(input_json)
     except Exception as e:
         error(f"subagent_stop hook failed: {e}")
@@ -1423,9 +1435,9 @@ def subagent_stop():
 def stop_failure():
     """Entry point for arize-hook-stop-failure."""
     try:
-        if not check_requirements():
-            return
         input_json = _read_stdin()
+        if not check_requirements(input_json, "StopFailure"):
+            return
         _handle_stop_failure(input_json)
     except Exception as e:
         error(f"stop_failure hook failed: {e}")
@@ -1434,9 +1446,9 @@ def stop_failure():
 def notification():
     """Entry point for arize-hook-notification."""
     try:
-        if not check_requirements():
-            return
         input_json = _read_stdin()
+        if not check_requirements(input_json, "Notification"):
+            return
         _handle_notification(input_json)
     except Exception as e:
         error(f"notification hook failed: {e}")
@@ -1445,9 +1457,9 @@ def notification():
 def permission_request():
     """Entry point for arize-hook-permission-request."""
     try:
-        if not check_requirements():
-            return
         input_json = _read_stdin()
+        if not check_requirements(input_json, "PermissionRequest"):
+            return
         _handle_permission_request(input_json)
     except Exception as e:
         error(f"permission_request hook failed: {e}")
@@ -1456,9 +1468,9 @@ def permission_request():
 def session_end():
     """Entry point for arize-hook-session-end."""
     try:
-        if not check_requirements():
-            return
         input_json = _read_stdin()
+        if not check_requirements(input_json, "SessionEnd"):
+            return
         _handle_session_end(input_json)
     except Exception as e:
         error(f"session_end hook failed: {e}")
@@ -1467,9 +1479,9 @@ def session_end():
 def post_tool_use_failure():
     """Entry point for arize-hook-post-tool-use-failure."""
     try:
-        if not check_requirements():
-            return
         input_json = _read_stdin()
+        if not check_requirements(input_json, "PostToolUseFailure"):
+            return
         _handle_post_tool_use_failure(input_json)
     except Exception as e:
         error(f"post_tool_use_failure hook failed: {e}")
@@ -1478,9 +1490,9 @@ def post_tool_use_failure():
 def subagent_start():
     """Entry point for arize-hook-subagent-start."""
     try:
-        if not check_requirements():
-            return
         input_json = _read_stdin()
+        if not check_requirements(input_json, "SubagentStart"):
+            return
         _handle_subagent_start(input_json)
     except Exception as e:
         error(f"subagent_start hook failed: {e}")
@@ -1489,9 +1501,9 @@ def subagent_start():
 def user_prompt_expansion():
     """Entry point for arize-hook-user-prompt-expansion."""
     try:
-        if not check_requirements():
-            return
         input_json = _read_stdin()
+        if not check_requirements(input_json, "UserPromptExpansion"):
+            return
         _handle_user_prompt_expansion(input_json)
     except Exception as e:
         error(f"user_prompt_expansion hook failed: {e}")
@@ -1500,9 +1512,9 @@ def user_prompt_expansion():
 def pre_compact():
     """Entry point for arize-hook-pre-compact."""
     try:
-        if not check_requirements():
-            return
         input_json = _read_stdin()
+        if not check_requirements(input_json, "PreCompact"):
+            return
         _handle_pre_compact(input_json)
     except Exception as e:
         error(f"pre_compact hook failed: {e}")
@@ -1511,9 +1523,9 @@ def pre_compact():
 def post_compact():
     """Entry point for arize-hook-post-compact."""
     try:
-        if not check_requirements():
-            return
         input_json = _read_stdin()
+        if not check_requirements(input_json, "PostCompact"):
+            return
         _handle_post_compact(input_json)
     except Exception as e:
         error(f"post_compact hook failed: {e}")
@@ -1522,9 +1534,9 @@ def post_compact():
 def permission_denied():
     """Entry point for arize-hook-permission-denied."""
     try:
-        if not check_requirements():
-            return
         input_json = _read_stdin()
+        if not check_requirements(input_json, "PermissionDenied"):
+            return
         _handle_permission_denied(input_json)
     except Exception as e:
         error(f"permission_denied hook failed: {e}")

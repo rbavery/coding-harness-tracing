@@ -35,6 +35,7 @@ from core.setup import (
     write_config,
     write_logging_config,
 )
+from core.setup.workshop import configure as configure_workshop
 from tracing.codex._toml import _toml_load_strict, _toml_write
 from tracing.codex.constants import (
     DISPLAY_NAME,
@@ -47,7 +48,6 @@ from tracing.codex.constants import (
 from tracing.codex.control import env_value, replace_setting, write_env_file
 from tracing.codex.install_legacy import cleanup_legacy_install
 from tracing.codex.notify_chain import install_notify, remove_notify
-from tracing.codex.workshop import configure as configure_workshop
 
 # Hook events from the legacy installer; used only for cleanup
 _HOOK_EVENTS = (

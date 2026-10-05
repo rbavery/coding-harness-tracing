@@ -256,6 +256,7 @@ install_harness() {
     local install_args=(install)
     [[ "$skills" == true ]] && install_args+=(--with-skills)
     [[ "$cmd" == codex && "$advanced" == true ]] && install_args+=(--advanced)
+    [[ "$cmd" == claude && "$advanced" == false ]] && install_args+=(--workshop)
     run_harness_py "$cmd" "$vp" "${install_args[@]}"
     info "Setup complete!"
 }
@@ -268,7 +269,7 @@ Arize Coding Harness Tracing Installer
 Usage: install.sh <command> [flags]
 
 Commands:
-  claude      Install and configure tracing for Claude Code / Agent SDK
+  claude      Install workshop tracing for Claude Code
   codex       Install workshop tracing for Codex desktop and CLI
   copilot     Install and configure tracing for GitHub Copilot (VS Code + CLI)
   cursor      Install and configure tracing for Cursor IDE
@@ -279,15 +280,15 @@ Commands:
   omp         Install and configure tracing for Oh My Pi (omp)
   devin       Install and configure tracing for Devin CLI
   status      Report configured harnesses and whether their hooks are wired up
-  pause codex          Pause Codex trace exports without restarting
-  resume codex         Resume Codex trace exports without restarting
-  trace-status codex   Show whether Codex trace exports are enabled
+  pause <codex|claude>          Pause tracing without restarting the agent
+  resume <codex|claude>         Resume tracing without restarting the agent
+  trace-status <codex|claude>   Show the agent's capture switch
   update      Update the installed coding-harness-tracing and re-register all harnesses
   uninstall <harness>   Tear down one harness
   uninstall             Full wipe: venv + repo + shared config
 
 Flags:
-  --advanced            With codex: use the original backend configuration wizard
+  --advanced            With codex or claude: use the original backend configuration wizard
   --with-skills         Symlink harness skills into .agents/skills/
   --branch NAME         Install from a git branch (default: codex/bug-bash-installer)
   --wheel-dir DIR       Install from local wheels in DIR instead of downloading
@@ -394,12 +395,13 @@ main() {
             fi
             ;;
         pause|resume|trace-status)
-            [[ "$subcmd" == codex ]] || { err "Use ${cmd} codex"; exit 1; }
+            [[ "$subcmd" == codex || "$subcmd" == claude ]] || { err "Use ${cmd} codex or ${cmd} claude"; exit 1; }
+            local control_module="tracing.${subcmd/claude/claude_code}.control"
             local vp; vp=$(venv_python) || { err "Venv not found — run install first"; exit 1; }
             local action=status
             [[ "$cmd" != pause ]] || action=off
             [[ "$cmd" != resume ]] || action=on
-            "$vp" -m tracing.codex.control "$action"
+            "$vp" -m "$control_module" "$action"
             ;;
         status)
             local vp; vp=$(venv_python) || { err "Venv not found — nothing installed"; exit 1; }

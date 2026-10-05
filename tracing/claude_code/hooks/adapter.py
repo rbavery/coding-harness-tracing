@@ -12,6 +12,7 @@ from typing import Optional
 
 from core.common import StateManager, env, generate_trace_id, get_timestamp_ms, log, redirect_stderr_to_log_file
 from core.constants import HARNESSES, STATE_BASE_DIR
+from core.tracing_control import hook_generation, hook_service, read_control
 
 # --- Module-level constants derived from HARNESSES ---
 _HARNESS = HARNESSES["claude-code"]
@@ -236,13 +237,42 @@ def resolve_transcript_path(input_json: dict, session_id: str) -> Optional[Path]
     return None
 
 
-def check_requirements() -> bool:
+def check_requirements(input_json: Optional[dict] = None, event_name: str = "") -> bool:
     """Check if tracing is enabled and initialize state directory.
 
     Returns False (and the hook should exit 0) if tracing is disabled.
     Matches bash: [[ "$ARIZE_TRACE_ENABLED" != "true" ]] && exit 0
     """
-    if not env.trace_enabled:
+    env.invalidate_caches()
+    hook_service.set(SERVICE_NAME)
+    current = read_control(SERVICE_NAME)
+    hook_generation.set(current["generation"])
+    if not current["enabled"] or not env.trace_enabled:
         return False
     STATE_DIR.mkdir(parents=True, exist_ok=True)
+    if input_json is not None and current["generation"]:
+        state = resolve_session(input_json)
+        # Every switch transition changes generation, even if no hooks fire
+        # during the paused interval. Discard pending tools/subagents/retries
+        # from the old generation before a transcript can be reconstructed.
+        with state._lock():
+            data = state._read()
+            if data.get("capture_generation") != current["generation"]:
+                data = {"capture_generation": current["generation"], "capture_wait_for_prompt": "true"}
+            if event_name == "UserPromptSubmit":
+                data.pop("capture_wait_for_prompt", None)
+            waiting = data.get("capture_wait_for_prompt") == "true"
+            state._write(data)
+        if waiting and event_name != "SessionStart":
+            return False
+        # Late results from a tool or subagent started in a discarded turn
+        # must not attach their content to the newly resumed turn.
+        if event_name in ("PostToolUse", "PostToolUseFailure"):
+            tool_id = input_json.get("tool_use_id", "")
+            if not tool_id or state.get(f"tool_{tool_id}_start") is None:
+                return False
+        if event_name == "SubagentStop":
+            agent_id = input_json.get("agent_id", "")
+            if not agent_id or state.get(f"subagent_{agent_id}_start_time") is None:
+                return False
     return True
